@@ -1,5 +1,6 @@
 import {SET_LYRICS} from '../constants';
 
+
 const initialState = {text: ''};
 
 const reducer = function (state = initialState, action) {
