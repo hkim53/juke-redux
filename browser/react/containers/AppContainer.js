@@ -4,11 +4,13 @@ import { hashHistory } from 'react-router';
 
 import initialState from '../initialState';
 import AUDIO from '../audio';
-
+import store from '../store.js'
 import Albums from '../components/Albums.js';
 import Album from '../components/Album';
 import Sidebar from '../components/Sidebar';
 import Player from '../components/Player';
+import { toggle, toggleOne, load, startSong, play, pause, next, prev } from '../action-creators/player';
+
 
 import { convertAlbum, convertAlbums, convertSong, skip } from '../utils';
 
@@ -16,8 +18,7 @@ export default class AppContainer extends Component {
 
   constructor (props) {
     super(props);
-    this.state = initialState;
-
+    this.state = Object.assign(initialState, store.getState());
     this.toggle = this.toggle.bind(this);
     this.toggleOne = this.toggleOne.bind(this);
     this.next = this.next.bind(this);
@@ -30,22 +31,12 @@ export default class AppContainer extends Component {
     this.addSongToPlaylist = this.addSongToPlaylist.bind(this);
   }
 
-  componentDidMount () {
-
-    Promise
-      .all([
-        axios.get('/api/albums/'),
-        axios.get('/api/artists/'),
-        axios.get('/api/playlists')
-      ])
-      .then(res => res.map(r => r.data))
-      .then(data => this.onLoad(...data));
-
-    AUDIO.addEventListener('ended', () =>
-      this.next());
-    AUDIO.addEventListener('timeupdate', () =>
-      this.setProgress(AUDIO.currentTime / AUDIO.duration));
+  componentDidMount() {
+    this.unsubscribe = store.subscribe(() => {
+      this.setState(store.getState());
+    });
   }
+  
 
   onLoad (albums, artists, playlists) {
     this.setState({
@@ -56,47 +47,35 @@ export default class AppContainer extends Component {
   }
 
   play () {
-    AUDIO.play();
-    this.setState({ isPlaying: true });
+    store.dispatch(play());
   }
 
   pause () {
-    AUDIO.pause();
-    this.setState({ isPlaying: false });
+    store.dispatch(pause());
   }
 
   load (currentSong, currentSongList) {
-    AUDIO.src = currentSong.audioUrl;
-    AUDIO.load();
-    this.setState({
-      currentSong: currentSong,
-      currentSongList: currentSongList
-    });
+    store.dispatch(load(currentSong, currentSongList));
   }
 
   startSong (song, list) {
-    this.pause();
-    this.load(song, list);
-    this.play();
+    store.dispatch(startSong(song, list));
   }
 
   toggleOne (selectedSong, selectedSongList) {
-    if (selectedSong.id !== this.state.currentSong.id)
-      this.startSong(selectedSong, selectedSongList);
-    else this.toggle();
+    store.dispatch(toggleOne(selectedSong, selectedSongList));
   }
 
   toggle () {
-    if (this.state.isPlaying) this.pause();
-    else this.play();
+    store.dispatch(toggle());
   }
 
   next () {
-    this.startSong(...skip(1, this.state));
+    store.dispatch(next());
   }
 
   prev () {
-    this.startSong(...skip(-1, this.state));
+    store.dispatch(prev());
   }
 
   setProgress (progress) {
@@ -184,32 +163,19 @@ export default class AppContainer extends Component {
   }
 
   render () {
-
-    const props = Object.assign({}, this.state, {
-      toggleOne: this.toggleOne,
-      toggle: this.toggle,
-      selectAlbum: this.selectAlbum,
-      selectArtist: this.selectArtist,
-      addPlaylist: this.addPlaylist,
-      selectPlaylist: this.selectPlaylist,
-      loadSongs: this.loadSongs,
-      addSongToPlaylist: this.addSongToPlaylist
-    });
-
     return (
       <div id="main" className="container-fluid">
         <div className="col-xs-2">
           <Sidebar playlists={this.state.playlists} />
         </div>
         <div className="col-xs-10">
-        {
-          this.props.children && React.cloneElement(this.props.children, props)
-        }
+          {/* Note that we are no longer passing new down from App, so no need to use React.cloneElement */}
+          { this.props.children }
         </div>
         <Player
-          currentSong={this.state.currentSong}
-          currentSongList={this.state.currentSongList}
-          isPlaying={this.state.isPlaying}
+          currentSong={this.state.player.currentSong}
+          currentSongList={this.state.player.currentSongList}
+          isPlaying={this.state.player.isPlaying}
           progress={this.state.progress}
           next={this.next}
           prev={this.prev}
